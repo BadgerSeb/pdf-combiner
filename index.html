@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF Combiner</title>
+<meta name="description" content="Combine PDFs, pictures, text files and DXF drawings into one PDF, or save pages as Excel, DXF or pictures. Everything stays on your computer.">
+<meta name="theme-color" content="#1b1d20">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/app.css">
+<script>
+  // theme before first paint, so dark mode doesn't flash white
+  try {
+    const t = localStorage.getItem('theme') || 'system';
+    const dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  } catch { document.documentElement.dataset.theme = 'light'; }
+</script>
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+<header class="band">
+  <img class="mark" src="assets/badger-mark.png" alt="">
+  <span class="title">PDF COMBINER</span>
+  <span class="company"><b>BADGER METAL &amp; MACHINE FABRICATION</b><small>Riverdale, New Jersey · Made in the USA</small></span>
+  <span class="spacer"></span>
+  <span class="update" id="update" hidden>A new version is ready. <button id="update-now">Restart now</button></span>
+  <button class="band-btn" id="theme" title="Switch between the light and dark look"></button>
+</header>
+
+<nav class="toolbar">
+  <button class="btn primary" id="add" title="Add PDFs, pictures, text files and DXF drawings (Ctrl+O). You can also drag files anywhere into this window.">+&nbsp; Add files…</button>
+  <button class="btn" id="paste" title="Paste a copied picture (screenshot, Snipping Tool), copied files, or text (Ctrl+V)">Paste</button>
+  <span class="gap"></span>
+  <button class="btn" id="remove" title="Remove the selected files from the list (Delete)">Remove</button>
+  <span class="gap small"></span>
+  <button class="btn" id="up" title="Move the selected files earlier (Ctrl+Up)">▲ Move up</button>
+  <button class="btn" id="down" title="Move the selected files later (Ctrl+Down)">▼ Move down</button>
+  <span class="gap small"></span>
+  <button class="btn" id="sort" title="Sort by file name, the way Explorer does (2 before 10)">Sort A–Z</button>
+  <button class="btn" id="clear">Clear all</button>
+</nav>
+
+<main id="main">
+  <section class="welcome" id="welcome">
+    <div class="card">
+      <img class="logo" src="assets/badger-logo.png" alt="Badger Metal &amp; Machine Fabrication">
+      <h1>Drop files here</h1>
+      <p>or drag them anywhere into this window · paste screenshots and images with Ctrl+V</p>
+      <button class="btn primary big" id="choose">+&nbsp; Choose files…</button>
+      <p class="types">PDF · JPG, PNG, TIFF and other images · Text files · DXF drawings — everything is turned into PDF pages for you.<br>
+      Word, Excel, PowerPoint, SOLIDWORKS and DWG files need the PDF Combiner desktop app.</p>
+      <p class="private">Your files never leave this computer.</p>
+    </div>
+  </section>
+
+  <aside class="files" id="files">
+    <div class="files-head"><b id="files-caption">Files</b><span>Ctrl or Shift-click to pick several, drag to move</span></div>
+    <div class="list" id="list" tabindex="0"></div>
+  </aside>
+  <div class="splitter" id="splitter"></div>
+  <section class="preview" id="preview">
+    <div class="preview-bar">
+      <div class="seg">
+        <button id="mode-file" title="Show the pages of the file selected on the left">This file</button>
+        <button id="mode-all" title="Show every page of the finished PDF, in order">Whole document</button>
+      </div>
+      <span class="gap"></span>
+      <button class="btn" id="include-all">Include all</button>
+      <button class="btn" id="skip-all">Skip all</button>
+      <span class="gap small"></span>
+      <label class="pages-label" for="pages">Pages:</label>
+      <input id="pages" placeholder="All pages" autocomplete="off" title="Type which pages to keep, e.g. 1-3, 5, 8-  (press Enter)&#10;Or just click pages below to skip them.">
+      <span class="gap"></span>
+      <button class="btn square" id="zoom-out" title="Smaller previews (Ctrl + mouse wheel)">−</button>
+      <button class="btn square" id="zoom-in" title="Bigger previews (Ctrl + mouse wheel)">+</button>
+    </div>
+    <div class="hint">Click a page to skip or include it &nbsp; · &nbsp; Hover a page to rotate or enlarge it &nbsp; · &nbsp; Double-click to view it full size</div>
+    <div class="grid-scroll" id="grid-scroll"><div class="grid" id="grid"></div><div class="empty" id="empty"></div></div>
+  </section>
+</main>
+
+<footer class="footer">
+  <span class="status" id="status"></span>
+  <a class="link" id="open-saved" hidden>Open</a>
+  <span class="spacer"></span>
+  <button class="btn format" id="format" title="What to save"></button>
+  <button class="btn primary save" id="save" title="Save the selected pages, in order (Ctrl+S)">Combine &amp; Save PDF</button>
+</footer>
+
+<div class="menu" id="format-menu" hidden></div>
+<div class="menu" id="page-menu" hidden></div>
+<div class="viewer" id="viewer" hidden></div>
+<div class="drop-hint" id="drop-hint" hidden></div>
+<input type="file" id="file-input" multiple hidden>
+</body>
+</html>

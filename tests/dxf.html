@@ -1,0 +1,82 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>dxf tests</title>
+<script type="module">
+// Unit checks for js/dxf, then the sample DXFs converted, rendered and compared with the Rust
+// version's PDFs (tests/out/dxf/rust/<name>.pdf, made beforehand from the same samples; '#' in
+// file names replaced by '_').
+import { dxfToPdf, dxfContent } from '../js/dxf/index.js';
+import { openPdf, renderPage } from '../js/pdfjs.js';
+import { PDFDocument } from '../vendor/pdf-lib.esm.min.js';
+import { runUnitTests, pageContent } from './dxf-tests.js';
+
+const out = (name, body) => fetch('/__out/' + name, { method: 'PUT', body });
+const png = (canvas) => new Promise((r) => canvas.toBlob(r, 'image/png'));
+const samples = [
+  '11 ga Bend Test.DXF',
+  'Coffee Tower Template - any thin # - steel - cut.DXF',
+  'Door Slot Template - Any # Steel - CUT.DXF',
+  'synthetic.dxf', // made by the test run: text, MTEXT, blocks, arrays, splines, colours, mm (Windows-1252)
+];
+const WIDTH = 1100;
+
+/** Share of pixels whose colour differs noticeably between two same-size canvases. */
+function pixelDiff(a, b) {
+  if (a.width !== b.width || a.height !== b.height) return `size ${a.width}x${a.height} vs ${b.width}x${b.height}`;
+  const da = a.getContext('2d').getImageData(0, 0, a.width, a.height).data;
+  const db = b.getContext('2d').getImageData(0, 0, b.width, b.height).data;
+  let n = 0;
+  for (let i = 0; i < da.length; i += 4) {
+    if (Math.abs(da[i] - db[i]) + Math.abs(da[i + 1] - db[i + 1]) + Math.abs(da[i + 2] - db[i + 2]) > 24) n++;
+  }
+  return `${n} px differ (${((100 * n) / (da.length / 4)).toFixed(4)}%)`;
+}
+
+/** Compares content streams line by line. */
+function contentDiff(mine, theirs) {
+  const [a, b] = [mine.trimEnd().split('\n'), theirs.trimEnd().split('\n')];
+  const diffs = [];
+  for (let i = 0; i < Math.max(a.length, b.length); i++) if (a[i] !== b[i]) diffs.push(i);
+  if (!diffs.length) return `content identical (${a.length} lines)`;
+  const show = diffs.slice(0, 3).map((i) => `\n      line ${i}: js "${a[i]}" / rust "${b[i]}"`).join('');
+  return `content: ${diffs.length} of ${a.length}/${b.length} lines differ${show}`;
+}
+
+const log = [];
+try {
+  log.push(...(await runUnitTests()));
+  for (const name of samples) {
+    try {
+      // the test server can't serve '#' in paths, so the samples are copied to out/dxf/src with '_'
+      const safe = name.replaceAll('#', '_');
+      const src = await fetch('out/dxf/src/' + encodeURIComponent(safe));
+      if (!src.ok) throw new Error('sample not found (copy tests/samples/*.DXF to tests/out/dxf/src)');
+      const bytes = new Uint8Array(await src.arrayBuffer());
+      const t = performance.now();
+      const pdf = await dxfToPdf(bytes, name);
+      const ms = Math.round(performance.now() - t);
+      await out(`${safe}.js.pdf`, pdf);
+      const mine = await renderPage(await openPdf(pdf), 0, WIDTH);
+      await out(`${safe}.js.png`, await png(mine));
+      let line = `SAMPLE ${name}: ${pdf.length} bytes, ${ms} ms`;
+      const ref = await fetch('out/dxf/rust/' + encodeURIComponent(safe) + '.pdf');
+      if (ref.ok) {
+        const refBytes = new Uint8Array(await ref.arrayBuffer());
+        const theirs = await renderPage(await openPdf(refBytes), 0, WIDTH);
+        await out(`${safe}.rust.png`, await png(theirs));
+        line += `\n    render: ${pixelDiff(mine, theirs)}`;
+        const refContent = await pageContent(await PDFDocument.load(refBytes));
+        line += `\n    ${contentDiff(dxfContent(bytes, name).content, refContent)}`;
+      } else {
+        line += ' (no Rust reference)';
+      }
+      log.push(line);
+    } catch (e) {
+      log.push(`FAIL sample ${name}: ${e.stack}`);
+    }
+  }
+} catch (e) {
+  log.push('ERROR ' + e.stack);
+}
+await out('done', log.join('\n'));
+</script>

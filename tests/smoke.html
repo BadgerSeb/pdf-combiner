@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>smoke</title>
+<script type="module">
+import * as pdfjs from '../vendor/pdfjs/pdf.min.mjs';
+import { PDFDocument } from '../vendor/pdf-lib.esm.min.js';
+pdfjs.GlobalWorkerOptions.workerSrc = '../vendor/pdfjs/pdf.worker.min.mjs';
+const out = (name, body) => fetch('/__out/' + name, { method: 'PUT', body });
+const log = [];
+try {
+  const bytes = new Uint8Array(await (await fetch('samples/Line Card.pdf')).arrayBuffer());
+  const doc = await pdfjs.getDocument({ data: bytes.slice(), cMapUrl: '../vendor/pdfjs/cmaps/', standardFontDataUrl: '../vendor/pdfjs/standard_fonts/', wasmUrl: '../vendor/pdfjs/wasm/' }).promise;
+  log.push('pages ' + doc.numPages);
+  const page = await doc.getPage(1);
+  const viewport = page.getViewport({ scale: 1 });
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width; canvas.height = viewport.height;
+  const t = performance.now();
+  await page.render({ canvas, viewport }).promise;
+  log.push('render ms ' + Math.round(performance.now() - t));
+  await out('smoke.png', await new Promise(r => canvas.toBlob(r, 'image/png')));
+  const webp = await new Promise(r => canvas.toBlob(r, 'image/webp', 0.9));
+  log.push('webp ' + (webp ? webp.type + ' ' + webp.size : 'none'));
+  const text = await page.getTextContent();
+  log.push('text items ' + text.items.length + ' first: ' + text.items.slice(0, 3).map(i => i.str).join(' | '));
+  const merged = await PDFDocument.create();
+  const src = await PDFDocument.load(bytes);
+  for (const p of await merged.copyPages(src, src.getPageIndices())) merged.addPage(p);
+  log.push('pdf-lib merged pages ' + merged.getPageCount());
+  log.push('serviceWorker ' + ('serviceWorker' in navigator) + ', secure ' + isSecureContext);
+} catch (e) { log.push('ERROR ' + e.stack); }
+await out('done', log.join('\n'));
+</script>

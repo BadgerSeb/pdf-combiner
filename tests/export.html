@@ -1,0 +1,11 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>export tests</title>
+<script type="module">
+// a module that fails to load (a syntax error, a missing export) is reported instead of hanging
+try {
+  await import('./export-test.js');
+} catch (e) {
+  await fetch('/__out/done', { method: 'PUT', body: 'LOAD ERROR ' + (e.stack || e) });
+}
+</script>
