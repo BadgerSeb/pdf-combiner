@@ -2,7 +2,7 @@
 
 import { convert, kindOf, extOf, ACCEPT } from './convert.js';
 import { Thumbs } from './thumbs.js';
-import { FORMATS, FIRST_IMAGE, saveAs } from './save.js';
+import { FORMATS, formatIndex, saveAs } from './save.js';
 import { openViewer, viewerKey, closeViewer, viewerOpen, refreshViewer } from './viewer.js';
 
 const $ = (id) => document.getElementById(id);
@@ -23,7 +23,7 @@ const state = {
   anchor: null,
   combined: false,
   thumb: clamp(+store.get('thumb', 190) || 190, 110, 420),
-  format: clamp(+store.get('format', 0) || 0, 0, FORMATS.length - 1),
+  format: formatIndex(store.get('format', 'pdf')),
   dpi: +store.get('dpi', 200) || 200,
   busy: false,
   savedText: '',
@@ -605,7 +605,7 @@ function renderFooter() {
   $('format').textContent = `${f.short}   ▾`;
   $('format').disabled = state.busy;
   const save = $('save');
-  save.textContent = state.format === 0 && !single ? 'Combine & Save PDF' : `Save as ${f.short}`;
+  save.textContent = f.id === 'pdf' && !single ? 'Combine & Save PDF' : `Save as ${f.short}`;
   save.disabled = !canSave();
   const working = state.items.filter(x => x.state === 'waiting' || x.state === 'working').length;
   const pages = state.items.filter(ready).reduce((n, x) => n + includedCount(x), 0);
@@ -664,25 +664,44 @@ function menuItem(menu, text, action, ticked) {
   const b = document.createElement('button');
   b.innerHTML = `<span class="tick">${ticked ? '✓' : ''}</span><span></span>`;
   b.lastChild.textContent = text;
-  b.onclick = () => { menu.hidden = true; action(); };
+  b.onclick = () => { b.closest('.menu').hidden = true; action(); };
   menu.appendChild(b);
+}
+
+function heading(menu, text) {
+  const h = document.createElement('div');
+  h.className = 'heading';
+  h.textContent = text;
+  menu.appendChild(h);
 }
 
 function formatMenu() {
   const btn = $('format').getBoundingClientRect();
   showMenu($('format-menu'), btn.left, btn.top - 6, (m) => {
-    FORMATS.forEach((f, i) => {
-      if (i === FIRST_IMAGE) m.appendChild(document.createElement('hr'));
-      menuItem(m, f.name, () => { state.format = i; store.set('format', i); scheduleRender(); }, i === state.format);
+    // three columns: documents | spreadsheets and drawings | pictures and their resolution
+    const columns = [['Documents'], ['Spreadsheets', 'Drawings'], ['Pictures']].map(() => {
+      const c = document.createElement('div');
+      c.className = 'column';
+      m.appendChild(c);
+      return c;
     });
-    m.appendChild(document.createElement('hr'));
-    const h = document.createElement('div');
-    h.className = 'heading';
-    h.textContent = 'Picture resolution';
-    m.appendChild(h);
+    const columnOf = { Documents: 0, Spreadsheets: 1, Drawings: 1, Pictures: 2 };
+    let group = null;
+    FORMATS.forEach((f, i) => {
+      const col = columns[columnOf[f.group]];
+      if (f.group !== group) {
+        group = f.group;
+        if (col.childElementCount) col.appendChild(document.createElement('hr'));
+        heading(col, f.group);
+      }
+      menuItem(col, f.name, () => { state.format = i; store.set('format', f.id); scheduleRender(); }, i === state.format);
+    });
+    const pics = columns[2];
+    pics.appendChild(document.createElement('hr'));
+    heading(pics, 'Picture resolution');
     for (const dpi of [100, 150, 200, 300, 600]) {
       const extra = { 150: '  (screen, email)', 300: '  (print)', 600: '  (fine print, large files)' }[dpi] || '';
-      menuItem(m, `${dpi} dpi${extra}`, () => { state.dpi = dpi; store.set('dpi', dpi); }, dpi === state.dpi);
+      menuItem(pics, `${dpi} dpi${extra}`, () => { state.dpi = dpi; store.set('dpi', dpi); }, dpi === state.dpi);
     }
   }, true);
 }

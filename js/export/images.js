@@ -3,6 +3,7 @@
 import { openPdf, renderPage } from '../pdfjs.js';
 import { GIFEncoder, quantize, applyPalette } from '../../vendor/gifenc.js';
 import { fileStem, fileExtension } from './pages.js';
+import { writeAvif } from './avif.js';
 
 export const IMAGE_KINDS = Object.freeze([
   { name: 'PNG', ext: 'png', mime: 'image/png', oneFile: false },
@@ -11,6 +12,11 @@ export const IMAGE_KINDS = Object.freeze([
   { name: 'GIF', ext: 'gif', mime: 'image/gif', oneFile: false },
   { name: 'TIFF', ext: 'tif', mime: 'image/tiff', oneFile: true },
   { name: 'WebP', ext: 'webp', mime: 'image/webp', oneFile: false },
+  { name: 'AVIF', ext: 'avif', mime: 'image/avif', oneFile: false },
+  { name: 'Photoshop', ext: 'psd', mime: 'image/vnd.adobe.photoshop', oneFile: false },
+  { name: 'TGA', ext: 'tga', mime: 'image/x-tga', oneFile: false },
+  { name: 'PPM', ext: 'ppm', mime: 'image/x-portable-pixmap', oneFile: false },
+  { name: 'Icon', ext: 'ico', mime: 'image/x-icon', oneFile: false },
 ].map(Object.freeze));
 
 export const RESOLUTIONS = Object.freeze([100, 150, 200, 300, 600]);
@@ -38,34 +44,47 @@ export function targetNames(baseName, pages, kind) {
  * order (one for TIFF) and the number of pages; name them with targetNames().
  */
 export async function saveImages(items, kind, dpi, progress) {
-  const pages = items.flatMap((it) => it.pages.map((p, i) => [it, i, p]).filter(([, , p]) => p.included));
-  if (!pages.length) throw new Error('No pages are selected.');
-
   const files = [];
   const tiffPages = [];
-  let open = null; // [item, pdf.js document]
+  const pages = await renderEach(items, dpi, progress, async (canvas, scale) => {
+    if (kind.oneFile) tiffPages.push(tiffPage(canvas, scale));
+    else files.push(await writeOne(canvas, scale, kind));
+  });
+  if (kind.oneFile) files.push(writeTiff(tiffPages));
+  return { files, pages };
+}
+
+/**
+ * Renders the included pages (or only those `want(itemIndex, pageIndex)` picks) at `dpi`, in
+ * order, and hands each canvas, the resolution it was made at, and its item and page index to
+ * `f`. The canvas is freed afterwards. Returns the number of pages rendered.
+ */
+export async function renderEach(items, dpi, progress, f, want = () => true) {
+  const pages = items.flatMap((it, k) => it.pages.map((p, i) => [k, i, p]).filter(([, i, p]) => p.included && want(k, i)));
+  if (!pages.length) throw new Error('No pages are selected.');
+  let open = null; // [item index, pdf.js document]
   try {
     for (let n = 0; n < pages.length; n++) {
-      const [it, index, info] = pages[n];
+      const [k, index, info] = pages[n];
       progress(`Saving page ${n + 1} of ${pages.length}…`);
-      if (!open || open[0] !== it) {
+      if (!open || open[0] !== k) {
         if (open) await closePdf(open[1]);
         open = null;
-        open = [it, await openPdf(it.bytes)];
+        open = [k, await openPdf(items[k].bytes)];
       }
       const { canvas, scale } = await render(open[1], info, index, dpi);
-      if (kind.oneFile) {
-        tiffPages.push(tiffPage(canvas, scale));
-      } else {
-        files.push(await writeOne(canvas, scale, kind));
-      }
+      await f(canvas, scale, k, index);
       canvas.width = canvas.height = 0; // let the browser have the memory back
     }
   } finally {
     if (open) await closePdf(open[1]);
   }
-  if (kind.oneFile) files.push(writeTiff(tiffPages));
-  return { files, pages: pages.length };
+  return pages.length;
+}
+
+/** A PNG of a canvas, carrying its resolution. */
+export async function pngOf(canvas, dpi) {
+  return setPngDpi(new Uint8Array(await (await toBlob(canvas, 'image/png')).arrayBuffer()), dpi);
 }
 
 /** Lets pdf.js free a document (and its worker side). */
@@ -138,6 +157,20 @@ async function writeOne(canvas, dpi, kind) {
       if (blob.type !== 'image/webp') throw new Error("This browser can't make WebP images.");
       return new Uint8Array(await blob.arrayBuffer());
     }
+    case 'avif':
+      return writeAvif(canvas);
+    case 'psd':
+      if (w > 30000 || h > 30000) {
+        throw new Error(`This page is too big for a Photoshop file at ${Math.round(dpi)} dpi (at most 30000 pixels a side). Pick a lower resolution.`);
+      }
+      return writePsd(pixels(canvas), w, h, dpi);
+    case 'tga':
+      if (w > 65535 || h > 65535) throw new Error('This page is too big for a TGA picture at this resolution. Pick a lower resolution.');
+      return writeTga(pixels(canvas), w, h);
+    case 'ppm':
+      return writePpm(pixels(canvas), w, h);
+    case 'ico':
+      return writeIco(canvas);
     default:
       throw new Error(`Unknown picture type: ${kind.ext}`);
   }
@@ -238,6 +271,103 @@ export function writeBmp(rgba, w, h, dpi) {
     o += row;
   }
   return out;
+}
+
+// ------------------------------------------------------------ PSD, TGA, PPM, ICO
+
+/** A flat RGB Photoshop file (no layers, raw planes) with its resolution. */
+export function writePsd(rgba, w, h, dpi) {
+  const plane = w * h;
+  const res = 12 + 16; // one image resource: ResolutionInfo
+  const out = new Uint8Array(26 + 4 + 4 + res + 4 + 2 + plane * 3);
+  const v = new DataView(out.buffer);
+  out.set([0x38, 0x42, 0x50, 0x53], 0); // "8BPS"
+  v.setUint16(4, 1); // version
+  v.setUint16(12, 3); // channels
+  v.setUint32(14, h);
+  v.setUint32(18, w);
+  v.setUint16(22, 8); // bits per channel
+  v.setUint16(24, 3); // RGB
+  let o = 26;
+  v.setUint32(o, 0); o += 4; // color mode data
+  v.setUint32(o, res); o += 4;
+  out.set([0x38, 0x42, 0x49, 0x4d], o); // "8BIM"
+  v.setUint16(o + 4, 0x03ed); // ResolutionInfo
+  v.setUint16(o + 6, 0); // empty name, padded
+  v.setUint32(o + 8, 16);
+  const fixed = Math.round(dpi * 65536);
+  v.setUint32(o + 12, fixed); v.setUint16(o + 16, 1); v.setUint16(o + 18, 1); // horizontal, pixels per inch, inches
+  v.setUint32(o + 20, fixed); v.setUint16(o + 24, 1); v.setUint16(o + 26, 1);
+  o += res;
+  v.setUint32(o, 0); o += 4; // layers and masks
+  v.setUint16(o, 0); o += 2; // raw
+  for (let c = 0; c < 3; c++) {
+    for (let i = 0, s = c; i < plane; i++, s += 4) out[o + i] = rgba[s];
+    o += plane;
+  }
+  return out;
+}
+
+/** An uncompressed 24-bit Targa, top row first. */
+export function writeTga(rgba, w, h) {
+  const out = new Uint8Array(18 + w * h * 3);
+  const v = new DataView(out.buffer);
+  out[2] = 2; // true color
+  v.setUint16(12, w, true);
+  v.setUint16(14, h, true);
+  out[16] = 24;
+  out[17] = 0x20; // origin at the top left
+  for (let i = 0, s = 0, o = 18; i < w * h; i++, s += 4, o += 3) {
+    out[o] = rgba[s + 2];
+    out[o + 1] = rgba[s + 1];
+    out[o + 2] = rgba[s];
+  }
+  return out;
+}
+
+/** A binary PPM (P6). */
+export function writePpm(rgba, w, h) {
+  const head = new TextEncoder().encode(`P6\n${w} ${h}\n255\n`);
+  const out = new Uint8Array(head.length + w * h * 3);
+  out.set(head);
+  for (let i = 0, s = 0, o = head.length; i < w * h; i++, s += 4, o += 3) {
+    out[o] = rgba[s];
+    out[o + 1] = rgba[s + 1];
+    out[o + 2] = rgba[s + 2];
+  }
+  return out;
+}
+
+/** A Windows icon holding the page at 256, 48, 32 and 16 pixels (longest side), as PNGs. */
+async function writeIco(canvas) {
+  const sizes = [256, 48, 32, 16];
+  const pngs = [];
+  for (const s of sizes) {
+    const k = s / Math.max(canvas.width, canvas.height);
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(canvas.width * k));
+    c.height = Math.max(1, Math.round(canvas.height * k));
+    const g = c.getContext('2d');
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(canvas, 0, 0, c.width, c.height);
+    pngs.push([c.width, c.height, new Uint8Array(await (await toBlob(c, 'image/png')).arrayBuffer())]);
+  }
+  const head = new Uint8Array(6 + 16 * pngs.length);
+  const v = new DataView(head.buffer);
+  v.setUint16(2, 1, true); // icon
+  v.setUint16(4, pngs.length, true);
+  let at = head.length;
+  pngs.forEach(([w, h, png], i) => {
+    const e = 6 + i * 16;
+    head[e] = w >= 256 ? 0 : w;
+    head[e + 1] = h >= 256 ? 0 : h;
+    v.setUint16(e + 4, 1, true); // planes
+    v.setUint16(e + 6, 32, true); // bits per pixel
+    v.setUint32(e + 8, png.length, true);
+    v.setUint32(e + 12, at, true);
+    at += png.length;
+  });
+  return concat([head, ...pngs.map((p) => p[2])]);
 }
 
 // ------------------------------------------------------------ TIFF

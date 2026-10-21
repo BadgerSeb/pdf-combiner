@@ -9,6 +9,13 @@ import { forEachPage, fileStem } from './pages.js';
 /** A row: cell texts, null for empty cells. */
 
 export async function toExcel(items, progress) {
+  const { sheets, pages } = await readSheets(items, progress);
+  progress('Saving…');
+  return { bytes: writeXlsx(sheets), pages };
+}
+
+/** The table on the included pages: a [name, rows] sheet per file. Throws when there's no text. */
+export async function readSheets(items, progress) {
   const sheets = []; // [name, rows]
   let pages = 0, cells = 0;
   let last = null;
@@ -31,8 +38,7 @@ export async function toExcel(items, progress) {
       'and a spreadsheet can only be made from pages with real text (made by a program such as Word, Excel or SOLIDWORKS).',
     );
   }
-  progress('Saving…');
-  return { bytes: writeXlsx(sheets), pages };
+  return { sheets, pages };
 }
 
 /** Rebuilds the rows and columns of one page from where its text sits. */
@@ -179,11 +185,11 @@ export function sheetNames(raw) {
 }
 
 /** Characters below space (other than tab) aren't allowed in the file; at most 32767 of them. */
-function clean(s) {
+export function clean(s) {
   return [...s].filter((c) => c >= ' ' || c === '\t').slice(0, 32767).join('');
 }
 
-function xml(s) {
+export function xml(s) {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]);
 }
 

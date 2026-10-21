@@ -1,8 +1,10 @@
 # PDF Combiner (web)
 
 The web version of PDF Combiner for Badger Metal & Machine Fabrication (Riverdale, NJ). Combine PDFs,
-pictures, text files and DXF drawings into one PDF; pick, skip and rotate pages; save as PDF, Excel, DXF,
-PNG, JPEG, BMP, GIF, TIFF or WebP. Light and dark mode.
+pictures, text files and DXF drawings into one PDF; pick, skip and rotate pages; save as PDF (one file or one
+per page), Word, OpenDocument text, RTF, plain text, a web page, PowerPoint, Excel, OpenDocument spreadsheet,
+CSV, DXF, SVG, EPS, or pictures: PNG, JPEG, WebP, AVIF, GIF, BMP, TIFF, Photoshop, TGA, PPM or Windows icon.
+Always dark (light mode cannot be turned on, by request).
 
 **Everything happens in your browser. Files are never uploaded anywhere.**
 
@@ -42,9 +44,10 @@ js/app.js                 state and actions: list, page grid, Pages box, theme, 
 js/convert.js             files -> PDF in the browser (PDF, pictures, TIFF, text, DXF)
 js/thumbs.js              page previews (pdf.js), size-limited cache
 js/viewer.js              full-size page viewer
-js/save.js                formats and writing files (Save dialog, folder for several pictures, download)
+js/save.js                the save formats and writing files (Save dialog, a folder for one-file-per-page, download)
 js/dxf/                   DXF reader and renderer (port of the desktop app's)
-js/export/                combine (pdf-lib); Excel and DXF from the PDF's content; pictures
+js/export/                combine and split (pdf-lib); Excel, CSV, ODS, DXF, SVG, EPS and documents from the PDF's
+                          content (docs.js, tables.js, vector.js); pictures (images.js, avif.js: AV1 via WebCodecs)
 sw.js, manifest.webmanifest  offline copy, install, automatic updates, "Open with"
 vendor/                   pdf.js 6.4 (Apache-2.0), pdf-lib 1.17.1, fflate, UTIF, gifenc (MIT); licenses in vendor/LICENSES
 tools/                    local server, headless-Edge test driver, icon drawing, version stamping

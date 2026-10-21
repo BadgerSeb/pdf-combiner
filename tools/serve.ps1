@@ -13,7 +13,7 @@ $types = @{
     '.css' = 'text/css; charset=utf-8'; '.json' = 'application/json'; '.webmanifest' = 'application/manifest+json'
     '.png' = 'image/png'; '.svg' = 'image/svg+xml'; '.ico' = 'image/x-icon'; '.wasm' = 'application/wasm'
     '.pdf' = 'application/pdf'; '.txt' = 'text/plain; charset=utf-8'; '.dxf' = 'text/plain; charset=utf-8'
-    '.jpg' = 'image/jpeg'; '.webp' = 'image/webp'; '.gif' = 'image/gif'; '.tif' = 'image/tiff'; '.bmp' = 'image/bmp'
+    '.jpg' = 'image/jpeg'; '.webp' = 'image/webp'; '.avif' = 'image/avif'; '.gif' = 'image/gif'; '.tif' = 'image/tiff'; '.bmp' = 'image/bmp'
 }
 
 New-Item -ItemType Directory -Force $Out | Out-Null

@@ -65,17 +65,20 @@ try {
     Get-ChildItem $dl -File | Remove-Item
     Invoke-Cdp $e 'Page.setDownloadBehavior' @{ behavior = 'allow'; downloadPath = $dl } | Out-Null
     Eval-Cdp $e "delete window.showSaveFilePicker; delete window.showDirectoryPicker; window.showSaveFilePicker = undefined; window.showDirectoryPicker = undefined; window.__alerts = []; window.alert = (m) => window.__alerts.push(String(m)); window.confirm = (m) => { window.__alerts.push('confirm: ' + m); return true; }; 1" | Out-Null
-    foreach ($fmt in 0..8) {
-        Eval-Cdp $e "(() => { document.getElementById('format').click(); const b = document.querySelectorAll('#format-menu button')[$fmt]; b.click(); return b.textContent; })()" | Out-Null
+    $count = Eval-Cdp $e "(() => { document.getElementById('format').click(); const n = [...document.querySelectorAll('#format-menu button')].filter(b => !/dpi/.test(b.textContent)).length; document.getElementById('format-menu').hidden = true; return n; })()"
+    foreach ($fmt in 0..($count - 1)) {
+        $name = Eval-Cdp $e "(() => { document.getElementById('format').click(); const b = [...document.querySelectorAll('#format-menu button')].filter(b => !/dpi/.test(b.textContent))[$fmt]; b.click(); return b.textContent.trim(); })()"
+        $fmt = "$fmt $name"
         Eval-Cdp $e "document.getElementById('save').click(); 1" | Out-Null
         for ($i = 0; $i -lt 120; $i++) {
             Start-Sleep -Milliseconds 500
             $st = Eval-Cdp $e "document.getElementById('status').textContent"
-            if ($st -match '^✓|^\s*$' -and -not (Eval-Cdp $e "document.getElementById('save').disabled")) { break }
+            $failed = Eval-Cdp $e "window.__alerts.length"
+            if (($st -match 'Saved|^\s*$' -or $failed -gt 0) -and -not (Eval-Cdp $e "document.getElementById('save').disabled")) { break }
         }
-        $log.Add("format ${fmt}: $st")
+        $log.Add("format ${fmt}: $st"); Write-Host "format ${fmt}: $st"
         $alerts = Eval-Cdp $e "window.__alerts.splice(0).join(' / ')"
-        if ($alerts) { $log.Add("   alert: $alerts") }
+        if ($alerts) { $log.Add("   alert: $alerts"); Write-Host "   alert: $alerts" }
     }
     Start-Sleep 2
     $log.Add("downloaded: " + ((Get-ChildItem $dl -File | ForEach-Object { "$($_.Name) ($([Math]::Round($_.Length / 1KB)) KB)" }) -join ', '))

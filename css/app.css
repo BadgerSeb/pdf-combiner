@@ -264,6 +264,10 @@ main:not(.empty-list) .welcome { display: none; }
 .menu button .tick { width: 14px; color: var(--accent); }
 .menu hr { border: 0; border-top: 1px solid var(--border); margin: 4px 2px; }
 .menu .heading { padding: 4px 10px 2px; color: var(--muted); font-size: 11.5px; }
+#format-menu:not([hidden]) { display: flex; flex-wrap: wrap; gap: 0 4px; max-width: calc(100vw - 8px); max-height: calc(100vh - 8px); overflow-y: auto; }
+#format-menu .column { width: 250px; max-width: 100%; }
+#format-menu .column + .column { border-left: 1px solid var(--border); padding-left: 4px; }
+#format-menu .heading { font-weight: 700; padding-top: 6px; }
 
 /* ---------------------------------------------------------------- viewer */
 .viewer { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; background: var(--viewer); }
