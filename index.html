@@ -10,12 +10,8 @@
 <link rel="icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="css/app.css">
 <script>
-  // theme before first paint, so dark mode doesn't flash white
-  try {
-    const t = localStorage.getItem('theme') || 'system';
-    const dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-  } catch { document.documentElement.dataset.theme = 'light'; }
+  // always dark, set before first paint so nothing flashes white
+  document.documentElement.dataset.theme = 'dark';
 </script>
 <script type="module" src="js/app.js"></script>
 </head>

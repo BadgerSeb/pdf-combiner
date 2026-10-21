@@ -395,28 +395,19 @@ async function save() {
 
 // ---------------------------------------------------------------- theme
 
-const darkQuery = matchMedia('(prefers-color-scheme: dark)');
-const isDark = () => document.documentElement.dataset.theme === 'dark';
+// Always dark. The light mode button asks twice, then says no whatever the answers.
 
 function applyTheme() {
-  const t = store.get('theme', 'system');
-  const dark = t === 'dark' || (t === 'system' && darkQuery.matches);
-  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-  $('theme').textContent = dark ? '☀  Light mode' : '☾  Dark mode';
+  document.documentElement.dataset.theme = 'dark';
+  $('theme').textContent = '☀  Light mode';
   document.querySelector('meta[name=theme-color]').content = '#1b1d20';
 }
 
 function toggleTheme() {
-  const dark = !isDark();
-  if (!dark) {
-    if (!confirm('Switch to light mode?')) return;
-    if (!confirm('Are you really sure? Light mode is a lot brighter.')) return;
-  }
-  store.set('theme', dark === darkQuery.matches ? 'system' : dark ? 'dark' : 'light');
-  applyTheme();
+  if (!confirm('Switch to light mode?')) return;
+  if (!confirm('Are you really sure? Light mode is a lot brighter.')) return;
+  alert('Sorry, light mode is not available. PDF Combiner stays dark.');
 }
-
-darkQuery.addEventListener('change', applyTheme);
 
 // ---------------------------------------------------------------- rendering
 
