@@ -395,7 +395,14 @@ async function save() {
 
 // ---------------------------------------------------------------- theme
 
-// Always dark. The light mode button asks twice, then says no whatever the answers.
+// Always dark. The light mode button keeps asking until the answer is no (Cancel).
+
+const lightQuestions = [
+  'Switch to light mode?',
+  'Are you really sure? Light mode is a lot brighter.',
+  'Really really sure? Click Cancel to stay in dark mode.',
+  'Light mode is not available. Click Cancel to stay in dark mode.',
+];
 
 function applyTheme() {
   document.documentElement.dataset.theme = 'dark';
@@ -404,9 +411,8 @@ function applyTheme() {
 }
 
 function toggleTheme() {
-  if (!confirm('Switch to light mode?')) return;
-  if (!confirm('Are you really sure? Light mode is a lot brighter.')) return;
-  alert('Sorry, light mode is not available. PDF Combiner stays dark.');
+  // OK only asks again; the last question repeats until they say no
+  for (let i = 0; confirm(lightQuestions[Math.min(i, lightQuestions.length - 1)]); i++);
 }
 
 // ---------------------------------------------------------------- rendering
